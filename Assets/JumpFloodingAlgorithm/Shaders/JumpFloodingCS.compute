@@ -1,0 +1,62 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel InitJFAUV
+#pragma kernel JFAIterationPass
+
+Texture2D<float4> InitTex;
+uint size;
+float StepSize;
+RWTexture2D<float4> JFAUV;
+RWTexture2D<float4> Output;
+
+[numthreads(8,8,1)]
+void InitJFAUV (uint3 id : SV_DispatchThreadID)
+{
+    //UV
+    float2 uv = float2(id.xy)/float(size);
+
+    float4 init = InitTex[id.xy];
+    float4 res = float4(0,0,0,0);
+    //没有遮罩的地方给-1，-1 的coord
+    if(init.a <= 0.00001 )
+    {
+        res = float4(-1,-1,0,0);
+    }else
+    {
+        res = float4(uv,0,0);
+    }
+    JFAUV[id.xy] = res;
+}
+
+
+[numthreads(8,8,1)]
+void JFAIterationPass (uint3 id : SV_DispatchThreadID)
+{
+    //UV
+    float2 uv = float2(id.xy)/float(size);
+    float bestDistance = 99999.0;
+    float2 bestUV = float2(-1,-1);
+
+    for(int y = -1; y <= 1; ++y)
+    {
+        for(int x = -1; x <= 1; ++x)
+        {
+            float2 UV_off = uv + float2(x,y) * StepSize;
+            float2 tempValue = JFAUV[uint2(UV_off*size)];
+            if(tempValue.x <= 0.00001 && tempValue.y <= 0.00001)
+            {
+                tempValue.xy = float2(-1,-1);
+            }
+            float dist = length(tempValue-uv);
+            if((tempValue.x >= 0) && (tempValue.y >= 0) && (dist < bestDistance))
+            {
+                bestDistance = dist;
+                bestUV = tempValue;
+            }
+        }
+    }
+    Output[id.xy] = float4(bestUV,0,0);
+    
+   
+}
+
+
